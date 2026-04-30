@@ -3,7 +3,11 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, process};
+use std::{
+    net::{SocketAddr, TcpListener},
+    process,
+};
+mod env_parser;
 
 // DTO(Data Transfer Object) 정의
 #[derive(Serialize, Deserialize)]
@@ -24,16 +28,8 @@ async fn main() {
         .route("/", get(|| async { "Hello, Rust API!" }))
         .route("/users", post(create_user));
     // get mac address from process env
-    let mac_address = std::env::var("MAC_ADDRESS").unwrap_or_else(|_| {
-        eprintln!("MAC_ADDRESS environment variable not set");
-        process::exit(1);
-    });
-    println!("MAC Address: {}", mac_address);
-
-    // 주소 바인딩
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("listening on {}", addr);
-
+    let (mac_address, server_address, port) = env_parser::get_env();
+    let addr = SocketAddr::from((server_address.parse::<std::net::IpAddr>().unwrap(), port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
