@@ -1,16 +1,29 @@
+mod env_parser;
+mod magic_packet;
 use axum::{
+    extract::State,
+    http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+use magic_packet::send_magic_packet;
+use serde::Serialize;
 use std::{
-    net::{SocketAddr, TcpListener},
+    net::{SocketAddr, UdpSocket},
     process,
 };
-mod env_parser;
-// I want to create a simple REST API with axum that has two endpoints: GET /hello and POST /echo.
-// The GET /hello endpoint should return a JSON response with a greeting message,
-// and the POST /echo endpoint should accept a string payload and return it back in the response.
+#[derive(Clone)]
+struct AppState {
+    mac_address: String,
+}
+
+#[derive(Serialize)]
+struct EchoResponse {
+    message: String,
+    magic_packet_sent: bool,
+    mac_address: String,
+    error: Option<String>,
+}
 
 #[tokio::main]
 async fn main() {
@@ -20,6 +33,7 @@ async fn main() {
         server_address,
         port,
     } = env_parser::get_env();
+    let state = AppState { mac_address };
     let listener = tokio::net::TcpListener::bind(SocketAddr::from((server_address, port)))
         .await
         .unwrap_or_else(|_| {
@@ -27,15 +41,19 @@ async fn main() {
                 "Socket is not valid or already in use, address: http://{server_address}:{port}",
             );
         });
+
     axum::serve(
         listener,
-        Router::new().route("/hello", get(get_hello).post(post_echo)),
+        Router::new()
+            // .route("/hello", get(get_hello))
+            .route("/echo", post(post_echo))
+            .with_state(state),
     )
     .await
     .unwrap_or_else(|e| {
         eprintln!("Failed to start server: {}", e);
         process::exit(1);
-    });
+    })
 }
 
 async fn get_hello() -> Json<Greeting> {
@@ -44,6 +62,28 @@ async fn get_hello() -> Json<Greeting> {
     })
 }
 
-async fn post_echo(){
-
+async fn post_echo(
+    State(state): State<AppState>,
+    body: String,
+) -> (StatusCode, Json<EchoResponse>) {
+    match send_magic_packet(&state.mac_address) {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(EchoResponse {
+                message: body,
+                magic_packet_sent: true,
+                mac_address: state.mac_address,
+                error: None,
+            }),
+        ),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(EchoResponse {
+                message: body,
+                magic_packet_sent: false,
+                mac_address: state.mac_address,
+                error: Some(error),
+            }),
+        ),
+    }
 }
