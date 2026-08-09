@@ -9,12 +9,22 @@ use axum::{
 use magic_packet::send_magic_packet;
 use serde::Serialize;
 use std::{
-    net::{SocketAddr, UdpSocket},
+    net::{IpAddr, SocketAddr},
     process,
 };
 #[derive(Clone)]
 struct AppState {
     mac_address: String,
+    server_address: IpAddr,
+    port: u16,
+}
+
+#[derive(Serialize)]
+struct Greeting {
+    message: String,
+    mac_address: String,
+    server_address: String,
+    port: u16,
 }
 
 #[derive(Serialize)]
@@ -33,7 +43,11 @@ async fn main() {
         server_address,
         port,
     } = env_parser::get_env();
-    let state = AppState { mac_address };
+    let state = AppState {
+        mac_address,
+        server_address,
+        port,
+    };
     let listener = tokio::net::TcpListener::bind(SocketAddr::from((server_address, port)))
         .await
         .unwrap_or_else(|_| {
@@ -42,10 +56,12 @@ async fn main() {
             );
         });
 
+    println!("Server is running at http://{}:{}", server_address, port);
+
     axum::serve(
         listener,
         Router::new()
-            // .route("/hello", get(get_hello))
+            .route("/hello", get(get_hello))
             .route("/echo", post(post_echo))
             .with_state(state),
     )
@@ -56,9 +72,12 @@ async fn main() {
     })
 }
 
-async fn get_hello() -> Json<Greeting> {
+async fn get_hello(State(state): State<AppState>) -> Json<Greeting> {
     Json(Greeting {
         message: "Hello, World!".to_string(),
+        mac_address: state.mac_address,
+        server_address: state.server_address.to_string(),
+        port: state.port,
     })
 }
 

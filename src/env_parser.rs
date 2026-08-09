@@ -1,9 +1,8 @@
-use std::{
-    env::{self, VarError},
-    net::{IpAddr, Ipv4Addr},
-    os::windows::process,
-};
 use regex::Regex;
+use std::{
+    env::{self},
+    net::{IpAddr, Ipv4Addr},
+};
 
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
@@ -17,7 +16,6 @@ pub fn get_env() -> ServerConfig {
     let server_address: IpAddr = get_server_address();
     println!("- MAC Address: {}", mac_address);
     println!("- Server: http://{}:{}", server_address, port);
-    // I want to return {macAddress, address, port} as in Typescript
     ServerConfig {
         mac_address,
         server_address,
@@ -26,7 +24,7 @@ pub fn get_env() -> ServerConfig {
 }
 fn get_mac_address() -> String {
     let mac_address = env::var("MAC_ADDRESS").expect("MAC_ADDRESS environment variable not set");
-    
+
     let mac_regex = Regex::new(r"^([0-9A-Fa-f]{2}[:\-]){5}([0-9A-Fa-f]{2})$")
         .expect("Failed to compile MAC address regex");
 
@@ -65,7 +63,7 @@ fn get_server_address() -> IpAddr {
     let default_addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
     env::var(SERVER_ADDRESS_KEY)
         .map_or_else(
-            |e| {
+            |_| {
                 eprintln!(
                     "{} environment variable not set, defaulting to {}",
                     SERVER_ADDRESS_KEY, default_addr
@@ -74,7 +72,7 @@ fn get_server_address() -> IpAddr {
             },
             |s| s.parse::<IpAddr>(),
         )
-        .unwrap_or_else(|e| {
+        .unwrap_or_else(|_| {
             eprintln!(
                 "{} is not a valid IP address. Defaulting to {}",
                 SERVER_ADDRESS_KEY, default_addr
