@@ -32,11 +32,28 @@
             background-color: #0056b3;
         }
     </style>
+    <script>
+        async function postWake() {
+            const response = await fetch('/wake', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ message: 'Wake up!' })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                alert(`Response: ${data.message}`);
+            } else {
+                alert('Error sending wake-up request.');
+            }
+        }
+    </script>
 </head>
 
 <body>
 
-    <button class="btn" onclick="alert('버튼이 클릭되었습니다!')">클릭하세요</button>
+    <button class="btn" onclick="postWake()">클릭하세요</button>
 
 </body>
 

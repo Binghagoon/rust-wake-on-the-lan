@@ -30,7 +30,7 @@ pub async fn route(listener: TcpListener, mac_address: String) -> () {
     axum::serve(
         listener,
         Router::new()
-            .route("/echo", post(post_echo))
+            .route("/wake", post(post_wake))
             .route("/", get(get_index))
             .with_state(state),
     )
@@ -47,7 +47,7 @@ pub async fn route(listener: TcpListener, mac_address: String) -> () {
 async fn get_index() -> Html<&'static str> {
     Html(include_str!("../public/index.html"))
 }
-async fn post_echo(
+async fn post_wake(
     State(state): State<AppState>,
     body: String,
 ) -> (StatusCode, Json<EchoResponse>) {
