@@ -14,6 +14,7 @@ RUN mkdir src && \
 
 # 실제 소스코드 복사 및 빌드
 COPY src ./src
+COPY public ./public
 # 터치(touch)로 의존성 캐시 갱신 후 정식 빌드
 RUN touch src/main.rs && cargo build --release
 
