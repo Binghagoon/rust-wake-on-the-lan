@@ -1,32 +1,9 @@
 mod env_parser;
+mod magic_packet;
 mod route;
-use axum::{
-    extract::State,
-    http::StatusCode,
-    routing::{get, post},
-    Json, Router,
-};
-use serde::Serialize;
-use std::{
-    net::{IpAddr, SocketAddr},
-    process,
-};
-#[derive(Serialize)]
-struct Greeting {
-    message: String,
-    mac_address: String,
-    server_address: String,
-    port: u16,
-}
 
-#[derive(Serialize)]
-struct EchoResponse {
-    message: String,
-    magic_packet_sent: bool,
-    mac_address: String,
-    error: Option<String>,
-}
-
+use crate::route::route;
+use std::net::SocketAddr;
 #[tokio::main]
 async fn main() {
     // 라우터 설정
@@ -43,40 +20,5 @@ async fn main() {
             );
         });
 
-    route(listener, mac_address, server_address, port).await;
-}
-
-async fn get_hello(State(state): State<AppState>) -> Json<Greeting> {
-    Json(Greeting {
-        message: "Hello, World!".to_string(),
-        mac_address: state.mac_address,
-        server_address: state.server_address.to_string(),
-        port: state.port,
-    })
-}
-
-async fn post_echo(
-    State(state): State<AppState>,
-    body: String,
-) -> (StatusCode, Json<EchoResponse>) {
-    match send_magic_packet(&state.mac_address) {
-        Ok(()) => (
-            StatusCode::OK,
-            Json(EchoResponse {
-                message: body,
-                magic_packet_sent: true,
-                mac_address: state.mac_address,
-                error: None,
-            }),
-        ),
-        Err(error) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(EchoResponse {
-                message: body,
-                magic_packet_sent: false,
-                mac_address: state.mac_address,
-                error: Some(error),
-            }),
-        ),
-    }
+    route(listener, mac_address).await;
 }

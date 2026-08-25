@@ -1,4 +1,7 @@
-use std::{net::IpAddr, process};
+use crate::magic_packet::send_magic_packet;
+use serde::Serialize;
+
+use std::process;
 
 use axum::{
     extract::State,
@@ -9,26 +12,21 @@ use axum::{
 };
 use tokio::net::TcpListener;
 
-use crate::magic_packet::send_magic_packet;
+#[derive(Serialize)]
+struct EchoResponse {
+    message: String,
+    magic_packet_sent: bool,
+    mac_address: String,
+    error: Option<String>,
+}
 
 #[derive(Clone)]
 struct AppState {
     mac_address: String,
-    server_address: IpAddr,
-    port: u16,
 }
 
-pub async fn route(
-    listener: TcpListener,
-    mac_address: String,
-    server_address: IpAddr,
-    port: u16,
-) -> () {
-    let state = AppState {
-        mac_address,
-        server_address,
-        port,
-    };
+pub async fn route(listener: TcpListener, mac_address: String) -> () {
+    let state = AppState { mac_address };
     axum::serve(
         listener,
         Router::new()
@@ -37,9 +35,9 @@ pub async fn route(
             .with_state(state),
     )
     .await
-    .and_then(|| {
+    .and_then(|_| {
         println!("Server started");
-        ()
+        Ok(())
     })
     .unwrap_or_else(|e| {
         eprintln!("Failed to start server: {}", e);
