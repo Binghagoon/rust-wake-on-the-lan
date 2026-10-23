@@ -5,14 +5,13 @@ use std::process;
 
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{Request, StatusCode},
     response::Html,
     routing::{get, post},
     Json, Router,
 };
 use tokio::net::TcpListener;
-use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
-use tracing::Level;
+use tower_http::trace::TraceLayer;
 
 #[derive(Serialize)]
 struct EchoResponse {

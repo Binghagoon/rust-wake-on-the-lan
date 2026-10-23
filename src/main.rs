@@ -3,9 +3,7 @@ mod magic_packet;
 mod route;
 
 use crate::route::route;
-use axum::http::Request;
 use std::net::SocketAddr;
-use tower_http::trace::TraceLayer;
 
 #[tokio::main]
 async fn main() {
