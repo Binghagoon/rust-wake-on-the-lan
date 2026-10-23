@@ -1,5 +1,5 @@
-# --- Stage 1: 빌드 단계 ---
-FROM rust:1.75-slim AS builder
+# --- Stage 1: 빌드 단계 (Rust 버전을 1.80 이상으로 상향) ---
+FROM rust:1.80-slim AS builder
 
 WORKDIR /app
 
@@ -28,7 +28,7 @@ FROM alpine:3.19
 
 WORKDIR /app
 
-# Alpine 기본 인증서 설치 (문법 오류 수정: --no-cache 사용)
+# Alpine 기본 인증서 설치
 RUN apk add --no-cache ca-certificates
 
 # musl 타겟으로 빌드된 바이너리 복사
