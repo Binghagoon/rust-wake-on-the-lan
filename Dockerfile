@@ -1,4 +1,4 @@
-# --- Stage 1: 빌드 단계 (Rust 버전을 1.80 이상으로 상향) ---
+# --- Stage 1: 빌드 단계 ---
 FROM rust:1.80-slim AS builder
 
 WORKDIR /app
@@ -13,14 +13,22 @@ RUN apt-get update && apt-get install -y \
 # ARM64 musl 타겟 추가
 RUN rustup target add aarch64-unknown-linux-musl
 
-# 소스코드 복사
-COPY . .
+# 1. 의존성 캐싱을 위해 Cargo 설정 파일만 먼저 복사
+COPY Cargo.toml Cargo.lock ./
 
-# CC, CARGO_TARGET 파이프라인 환경변수 지정 후 musl 릴리스 빌드
+# 2. 빈 src/main.rs를 만들어 의존성만 먼저 빌드 (이 단계가 캐싱됨!)
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
 ENV CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
 
 RUN cargo build --release --target aarch64-unknown-linux-musl
+
+# 3. 실제 소스코드 복사
+COPY src ./src
+
+# 4. 타임스탬프를 갱신하여 실제 소스코드만 빠르게 컴파일
+RUN touch src/main.rs && cargo build --release --target aarch64-unknown-linux-musl
 
 
 # --- Stage 2: 실행 단계 (Alpine Linux) ---
