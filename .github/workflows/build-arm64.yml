@@ -25,6 +25,11 @@ jobs:
       # 깃헙 액션 캐시 적용
       - name: Cache Cargo registry & build
         uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+          shared-key: aarch64-unknown-linux-musl
+          cache-target: true
+          cache-on-failure: true
 
       # 러너 네이티브 환경에서 고속 크로스 컴파일
       - name: Build Release Binary
