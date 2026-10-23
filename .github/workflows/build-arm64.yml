@@ -16,30 +16,37 @@ jobs:
         with:
           targets: aarch64-unknown-linux-musl
 
-      # 크로스 컴파일용 C 툴체인 설치 (러너 네이티브 속도로 동작)
+      # 크로스 컴파일용 C 툴체인 및 musl 관련 패키지 설치
       - name: Install cross-compilation tools
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
-      # 깃헙 액션 캐시 적용 (의존성 재다운로드 방지)
+      # 깃헙 액션 캐시 적용
       - name: Cache Cargo registry & build
         uses: Swatinem/rust-cache@v2
 
-      # 러너 네이티브 환경에서 고속 크로스 컴파일 (QEMU 안 씀!)
+      # 러너 네이티브 환경에서 고속 크로스 컴파일
       - name: Build Release Binary
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
           CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
+          CXX_aarch64_unknown_linux_musl: aarch64-linux-gnu-g++
         run: |
           cargo build --release --target aarch64-unknown-linux-musl
+
+      # [디버깅용] 빌드 결과물 경로 확인 (파일이 실제로 어디에 생성되었는지 확인)
+      - name: Check build artifacts
+        run: |
+          find target/aarch64-unknown-linux-musl/release -maxdepth 2
 
       # 빌드된 바이너리를 도커 빌드 경로로 이동
       - name: Prepare binary for Docker
         run: |
+          # Cargo.toml에 정의된 패키지 이름이 rust-wol이 맞는지 확인 필요
           cp target/aarch64-unknown-linux-musl/release/rust-wol ./rust-wol
 
-      # Docker는 단순 패키징만 수행 (에뮬레이션 불필요)
+      # Docker는 단순 패키징만 수행
       - name: Build Docker Image
         run: |
           docker build -t rust-wol:latest .
