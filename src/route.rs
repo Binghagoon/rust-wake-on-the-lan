@@ -11,6 +11,8 @@ use axum::{
     Json, Router,
 };
 use tokio::net::TcpListener;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 #[derive(Serialize)]
 struct EchoResponse {
@@ -32,6 +34,11 @@ pub async fn route(listener: TcpListener, mac_address: String) -> () {
         Router::new()
             .route("/wake", post(post_wake))
             .route("/", get(get_index))
+            .layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                    .on_response(DefaultOnResponse::new().level(Level::INFO)),
+            )
             .with_state(state),
     )
     .await
