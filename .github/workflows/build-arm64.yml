@@ -1,0 +1,83 @@
+name: Deploy Rust Axum via Image Transfer
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. 멀티 플랫폼 빌드를 위한 QEMU 및 Buildx 설정
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 2. ARM 이미지 빌드 및 Tar 파일로 직접 출력 (Dockerfile 자동 인식)
+      - name: Build and Export ARM image
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            -t rust-wol:latest \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            --output type=docker,dest=image.tar \
+            .
+
+      # 3. 압축 (전송 속도 향상)
+      - name: Compress image
+        run: gzip -f image.tar
+
+      # 4. 서버로 전송 (SCP)
+      - name: Copy image to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "image.tar.gz"
+          target: "/home/github-deploy/"
+
+      # 5. 서버에서 실행 (SSH)
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /home/github-deploy
+
+            # 기존 컨테이너 및 이미지 정리
+            docker stop rust-wol || true
+            echo "Stopped existing container (if any)."
+            docker rm rust-wol || true
+            echo "Removed existing container (if any)."
+            docker rmi rust-wol:latest || true
+            echo "Removed existing image (if any)."
+            echo "Cleaned up existing resources."
+
+            # 새 이미지 로드
+            gunzip -c image.tar.gz | docker load
+            echo "Loaded new image."
+            # 환경 변수 파일 생성 (.env)
+            cat << 'EOF' > .env
+            MAC_ADDRESS=${{ secrets.MAC_ADDRESS }}
+            PORT=${{ secrets.PORT }}
+            EOF
+
+            # 컨테이너 실행
+            docker run -d \
+              --network host \
+              --restart unless-stopped \
+              --name rust-wol \
+              --env-file .env \
+              rust-wol:latest
+
+            # 임시 파일 정리
+            rm -f image.tar.gz

@@ -1,37 +1,37 @@
-# ==========================================
-# 1. Build Stage: 앱 컴파일
-# ==========================================
-FROM rust:1.80-slim AS builder
-
-WORKDIR /usr/src/app
-
-# 의존성 캐싱을 위한 Dummy src 작성 (소스코드 변경 시 매번 Cargo build 재수행 방지)
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && \
-    echo "fn main() { println!(\"dummy\"); }" > src/main.rs && \
-    cargo build --release && \
-    rm -rf src
-
-# 실제 소스코드 복사 및 빌드
-COPY src ./src
-COPY public ./public
-# 터치(touch)로 의존성 캐시 갱신 후 정식 빌드
-RUN touch src/main.rs && cargo build --release
-
-# ==========================================
-# 2. Runtime Stage: 실행 전용 경량 이미지
-# ==========================================
-FROM debian:bookworm-slim AS runner
-
-# SSL/TLS 통신(reqwest 등)이 필요한 경우를 대비해 CA 인증서 설치
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+# --- Stage 1: 빌드 단계 ---
+FROM rust:1.75-slim AS builder
 
 WORKDIR /app
 
-# 빌드 스테이지에서 생성된 실행 파일만 복사 (프로젝트명으로 변경)
-COPY --from=builder /usr/src/app/target/release/rust-wake-on-the-lan /app/my_rust_app
+# musl 크로스 컴파일용 C 툴체인 설치
+RUN apt-get update && apt-get install -y \
+    musl-tools \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
 
-# 컨테이너 실행
-CMD ["/app/my_rust_app"]
+# ARM64 musl 타겟 추가
+RUN rustup target add aarch64-unknown-linux-musl
+
+# 소스코드 복사
+COPY . .
+
+# CC, CARGO_TARGET 파이프라인 환경변수 지정 후 musl 릴리스 빌드
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
+
+RUN cargo build --release --target aarch64-unknown-linux-musl
+
+
+# --- Stage 2: 실행 단계 (Alpine Linux) ---
+FROM alpine:3.19
+
+WORKDIR /app
+
+# Alpine 기본 인증서 설치 (문법 오류 수정: --no-cache 사용)
+RUN apk add --no-cache ca-certificates
+
+# musl 타겟으로 빌드된 바이너리 복사
+COPY --from=builder /app/target/aarch64-unknown-linux-musl/release/rust-wake-on-the-lan /app/app
+
+CMD ["./app"]
