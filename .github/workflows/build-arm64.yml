@@ -50,10 +50,12 @@ jobs:
       - name: Build Docker Image
         run: |
           docker build -t rust-wol:latest .
-          docker save rust-wol:latest -o image.tar
+          docker save rust-wol:latest -o rust-wol.tar
 
       - name: Compress image
-        run: gzip -f image.tar
+        run: |
+          gzip -f rust-wol.tar 
+          sudo chmod 644 rust-wol.tar.gz
 
       - name: Copy image to server
         uses: appleboy/scp-action@v0.1.7
@@ -61,7 +63,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "image.tar.gz"
+          source: "rust-wol.tar.gz"
           target: "/home/github-deploy/"
 
       - name: Deploy on server
@@ -75,7 +77,7 @@ jobs:
             docker stop rust-wol || true
             docker rm rust-wol || true
             docker rmi rust-wol:latest || true
-            gunzip -c image.tar.gz | docker load
+            gunzip -c rust-wol.tar.gz | docker load
 
             docker run -d \
               --network host \
@@ -84,4 +86,4 @@ jobs:
               -e PORT=${{ secrets.PORT }} \
               rust-wol:latest 
 
-            rm -f image.tar.gz
+            rm -f rust-wol.tar.gz
