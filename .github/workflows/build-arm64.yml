@@ -1,4 +1,4 @@
-name: Deploy Rust Axum via Image Transfer
+name: Fast Deploy Rust
 
 on:
   push:
@@ -11,29 +11,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 1. 멀티 플랫폼 빌드를 위한 QEMU 및 Buildx 설정
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # 2. ARM 이미지 빌드 및 Tar 파일로 직접 출력 (Dockerfile 자동 인식)
-      - name: Build and Export ARM image
+      # 크로스 컴파일용 C 툴체인 설치 (러너 네이티브 속도로 동작)
+      - name: Install cross-compilation tools
         run: |
-          docker buildx build \
-            --platform linux/arm64 \
-            -t rust-wol:latest \
-            --cache-from type=gha \
-            --cache-to type=gha,mode=max \
-            --output type=docker,dest=image.tar \
-            .
+          sudo apt-get update
+          sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
-      # 3. 압축 (전송 속도 향상)
+      # 깃헙 액션 캐시 적용 (의존성 재다운로드 방지)
+      - name: Cache Cargo registry & build
+        uses: Swatinem/rust-cache@v2
+
+      # 러너 네이티브 환경에서 고속 크로스 컴파일 (QEMU 안 씀!)
+      - name: Build Release Binary
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
+          CC_aarch64_unknown_linux_musl: aarch64-linux-gnu-gcc
+        run: |
+          cargo build --release --target aarch64-unknown-linux-musl
+
+      # 빌드된 바이너리를 도커 빌드 경로로 이동
+      - name: Prepare binary for Docker
+        run: |
+          cp target/aarch64-unknown-linux-musl/release/rust-wol ./rust-wol
+
+      # Docker는 단순 패키징만 수행 (에뮬레이션 불필요)
+      - name: Build Docker Image
+        run: |
+          docker build -t rust-wol:latest .
+          docker save rust-wol:latest -o image.tar
+
       - name: Compress image
         run: gzip -f image.tar
 
-      # 4. 서버로 전송 (SCP)
       - name: Copy image to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -43,7 +57,6 @@ jobs:
           source: "image.tar.gz"
           target: "/home/github-deploy/"
 
-      # 5. 서버에서 실행 (SSH)
       - name: Deploy on server
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -52,32 +65,15 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd /home/github-deploy
-
-            # 기존 컨테이너 및 이미지 정리
             docker stop rust-wol || true
-            echo "Stopped existing container (if any)."
             docker rm rust-wol || true
-            echo "Removed existing container (if any)."
             docker rmi rust-wol:latest || true
-            echo "Removed existing image (if any)."
-            echo "Cleaned up existing resources."
-
-            # 새 이미지 로드
             gunzip -c image.tar.gz | docker load
-            echo "Loaded new image."
-            # 환경 변수 파일 생성 (.env)
-            cat << 'EOF' > .env
-            MAC_ADDRESS=${{ secrets.MAC_ADDRESS }}
-            PORT=${{ secrets.PORT }}
-            EOF
 
-            # 컨테이너 실행
             docker run -d \
               --network host \
               --restart unless-stopped \
               --name rust-wol \
-              --env-file .env \
-              rust-wol:latest
+              rust-wol:latest 
 
-            # 임시 파일 정리
             rm -f image.tar.gz
