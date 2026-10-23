@@ -3,7 +3,10 @@ mod magic_packet;
 mod route;
 
 use crate::route::route;
+use axum::http::Request;
 use std::net::SocketAddr;
+use tower_http::trace::TraceLayer;
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -19,6 +22,7 @@ async fn main() {
         server_address,
         port,
     } = env_parser::get_env();
+
     let listener = tokio::net::TcpListener::bind(SocketAddr::from((server_address, port)))
         .await
         .unwrap_or_else(|_| {

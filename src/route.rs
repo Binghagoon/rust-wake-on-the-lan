@@ -35,9 +35,30 @@ pub async fn route(listener: TcpListener, mac_address: String) -> () {
             .route("/wake", post(post_wake))
             .route("/", get(get_index))
             .layer(
-                TraceLayer::new_for_http()
-                    .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
-                    .on_response(DefaultOnResponse::new().level(Level::INFO)),
+                TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
+                    // Nginx가 전달해 준 X-Forwarded-For 또는 X-Real-IP에서 실제 클라이언트 IP 추출
+                    let client_ip = request
+                        .headers()
+                        .get("x-forwarded-for")
+                        .and_then(|v| v.to_str().ok())
+                        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
+                        .or_else(|| {
+                            request
+                                .headers()
+                                .get("x-real-ip")
+                                .and_then(|v| v.to_str().ok())
+                                .map(|s| s.to_string())
+                        })
+                        .unwrap_or_else(|| "unknown".to_string());
+
+                    tracing::info_span!(
+                        "request",
+                        method = %request.method(),
+                        uri = %request.uri(),
+                        version = ?request.version(),
+                        client_ip = %client_ip,
+                    )
+                }),
             )
             .with_state(state),
     )
