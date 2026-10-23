@@ -74,6 +74,7 @@ jobs:
               --network host \
               --restart unless-stopped \
               --name rust-wol \
+              -e PORT=${{ secrets.PORT }} \
               rust-wol:latest 
 
             rm -f image.tar.gz
