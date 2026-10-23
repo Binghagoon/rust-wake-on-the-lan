@@ -84,6 +84,7 @@ jobs:
               --restart unless-stopped \
               --name rust-wol \
               -e PORT=${{ secrets.PORT }} \
+              -e MAC_ADDRESS=${{ secrets.MAC_ADDRESS }} \
               rust-wol:latest 
 
             rm -f rust-wol.tar.gz
